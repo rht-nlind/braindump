@@ -18,7 +18,7 @@ For more information on available commands, visit https://libguestfs.org/.
 [user@host ~]$ *wget https://download.fedoraproject.org/pub/fedora/linux/releases/34/Cloud/x86_64/images/Fedora-Cloud-Base-34-1.2.x86_64.qcow2*
 ----
 
-2) Determine the image size and partitions.
+2) Determine the image disk size and partitions.
 
 2.1) Use the `qemu-img info` command to determine the image size.
 
@@ -59,7 +59,7 @@ Name       Type        VFS   Label  MBR  Size  Parent
 ----
 
 
-3) If desired, resize the image and identified partitions. 
+3) If desired, resize the image and partitions. 
 
 3.1) To resize the image, you must first create a new image with the desired size and name. 
 Create a new qcow2 image with the `qemu-img create` command.
@@ -193,7 +193,7 @@ To sparsify the disk image without creating an additional disk image, use the `v
 
 [subs=+quotes]
 ----
-[user@host ~]$ *virt-sparsify --in-place _new-image_.qcow2.*
+[user@host ~]$ *virt-sparsify --in-place _new-image_.qcow2*
 ----
 
 .Example:
@@ -230,7 +230,7 @@ Format specific information:
 == Other Modifications
 Below are additional commands that may help with customizing your disk images.
 
-=== Copy a file/directory to an image
+=== Copy a File/Directory to an Image
 Copy files or directories into an image with the `virt-copy-in` or `virt-customize` commands. 
 
 [subs=+quotes]
@@ -254,7 +254,8 @@ Copy files or directories into an image with the `virt-copy-in` or `virt-customi
 [   3.8] Finishing off
 ----
 
-=== Run commands or remove files on an image with the `virt-customize` command.
+=== Run Commands, Scripts, or Remove Files on an Image 
+Run commands, scripts, or remove files with the `virt-customize`` command.
 
 [subs=+quotes]
 ----
@@ -271,7 +272,49 @@ Copy files or directories into an image with the `virt-copy-in` or `virt-customi
 [   3.8] Finishing off
 ----
 
-=== List contents of a directory on an image with the `virt-ls` command.
+[subs=+quotes]
+----
+[user@host ~]$ *virt-customize -a _new-image_.qcow2 --run _SCRIPT_*
+----
+
+.Example
+[subs=+quotes]
+----
+[user@host ~]$ *virt-customize -a helloworld.qcow2 --run mariadb-setup.sh*
+[   0.0] Examining the guest ...
+[   3.7] Setting a random seed
+[   3.7] Running: mariadb-setup.sh
+[   9.5] Finishing off
+----
+
+=== Run Scripts, Commands, or Install Packages on the First Boot
+Run scripts, commands, or install packages as root during the first boot with the `virt-customize` command.
+
+[subs=+quotes]
+----
+[user@host ~]$ *virt-customize -a _new_image_.qcow2 --firstboot _SCRIPT_*
+----
+[subs=+quotes]
+----
+[user@host ~]$ *virt-customize -a _new_image_.qcow2 --firstboot-command '_command_'*
+----
+[subs=+quotes]
+----
+[user@host ~]$ *virt-customize -a _new_image_.qcow2 --firstboot-install _Package_,_Package_*
+----
+
+.Example
+[subs=+quotes]
+----
+[user@host ~]$ *virt-customize -a helloworld.qcow2 --firstboot mariadb-secure.sh
+[   0.0] Examining the guest ...
+[   5.1] Setting a random seed
+[   5.1] Installing firstboot script: mariadb-secure.sh
+[   5.2] Finishing off
+----
+
+=== List Contents of a Directory on an Image
+List contents of a directory on an image with the `virt-ls` command. 
 
 [subs=+quotes]
 ----
@@ -291,7 +334,8 @@ NetworkManager
 ...output omitted...
 ----
 
-=== Display contents of a file on the image with the `virt-cat` command.
+=== Display Contents of a File on an Image 
+Display contents of a file on an image with the `virt-cat` command.
 
 [subs=+quotes]
 ----
@@ -305,12 +349,12 @@ NetworkManager
 dummy
 ----
 
-=== Edit files on the image with the `virt-edit` command.
+=== Edit Files on an Image
 Use your local editor to modify a file or edit the file non-interactively with the `virt-edit` command.
 Confirm the change afterwards with the `virt-cat` command.
 
 
-==== Interactive/local editor:
+==== Interactive/Local Editor:
 [subs=+quotes]
 ----
 [user@host ~]$ *virt-edit -a _new-image_.qcow2 _/path/to/file_*
@@ -342,8 +386,9 @@ Confirm the change afterwards with the `virt-cat` command.
 foo
 ----
 
-=== Uninstall Cloud-Init with the `virt-customize` command.
-After customizing the image, use `virt-customize` to remove `cloud-init`. This may help with customization issues in OpenShift Virtualization. 
+=== Uninstall Cloud-Init or Other Packages
+After customizing the image, use `virt-customize` to remove `cloud-init` or other software packages. 
+Removing `cloud-init` will prevent OpenShift Virtualization from further modifying the image with `cloudInitNoCloud` scripts.
 
 [subs=+quotes]
 ----
@@ -360,7 +405,7 @@ After customizing the image, use `virt-customize` to remove `cloud-init`. This m
 [  10.0] Finishing off
 ----
 
-=== Prepare the disk image for new environments with the `virt-sysprep` command. 
+=== Prepare the Disk Image for New Environments (Sysprep)
 To run sysprep on the disk image, use the `virt-sysprep` command and include the `--operations` option. 
 For a list of available operations, run `virt-sysprep --list-options`
 

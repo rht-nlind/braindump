@@ -75,9 +75,9 @@ metadata:
 ----
 ...output omitted...
  volumes:
-      - name: vm-disk
-        persistentVolumeClaim:
-          claimName: _<PVC-NAME>_
+ - name: vm-disk
+   persistentVolumeClaim:
+     claimName: _<PVC-NAME>_
 ----
 
 4.3) If the PVC uses block volume mode, modify the deployment `volumeMounts` and `mountPath` objects to `volumeDevices` and `devicePath` respectively. The `devicePath` will point to _/dev/vmdisk_.
@@ -230,7 +230,7 @@ route.route.openshift.io/vm-exporter created
 
 [subs=+quotes]
 ----
-[studen@workstation vm-exporter-main]$ *oc get pods*
+[student@workstation vm-exporter-main]$ *oc get pods*
 NAME                    READY  STATUS    RESTARTS  AGE
 vm-exporter-66c...wrg   1/1    Running   0         2m57s
 ----
@@ -238,13 +238,12 @@ vm-exporter-66c...wrg   1/1    Running   0         2m57s
 7) Use the `wget` command to download the compressed RAW disk image. 
 Be sure to save the file with the `.img.xz` extension.
 
-7.1) Retrieve the route with `oc get route`.
+7.1) Set the route host name to a variable with `oc get route`.
 
 [subs=+quotes]
 ----
-[student@workstation vm-exporter-main]$ *oc get route*
-NAME         HOST/PORT                                   PATH  SERVICES     PORT  TERMINATION  WILDCARD
-vm-exporter  vm-exporter-test-vms.apps.ocp4.example.com        vm-exporter  http               None
+[student@workstation vm-exporter-main]$ *ROUTE_NAME=$(oc get route vm-exporter \
+-o jsonpath='{.spec.host}')*
 ----
 
 7.2) Download and rename the compressed RAW disk image with the `wget` command and the `-O` option.
@@ -253,8 +252,7 @@ This may take several minutes to complete.
 
 [subs=+quotes]
 ----
-[student@workstation vm-exporter-main]$ *wget -O _image-name_.img.xz \
-http://vm-exporter-_NAMESPACE_.apps._ocp4_.example.com*
+[student@workstation vm-exporter-main]$ *wget -O _image-name_.img.xz $ROUTE_NAME*
 ----
 
 8) Decompress the RAW image with the `unxz` command. 
@@ -319,11 +317,10 @@ cluster_size: 65536
 ...output omitted...
 ----
 
-You now have a local copy of your vm's disk.
+You now have a local copy of your vm's disk image.
 
 === Next Steps
-If your vm's disk does require further adjustments, create a container image of your VM disk and then upload the disk image to Quay.
-
+If your vm's disk does not require further adjustments, create a container image of your VM disk and then upload the disk image to Quay.
 
 1) Create a Dockerfile with the following content:
 
@@ -337,11 +334,11 @@ ADD --chown=107:107 _/path/to/image_.qcow2 /disk    <1>
 ----
 
 
-2) Log in to your Quay repository with the `podman` command
+2) Log in to your Quay repository with the `podman login` command.
 
 [subs=+quotes]
 ----
-[user@host ~]$ *podman login -u _username_ https://quay.io/_your-repo_*
+[user@host ~]$ *podman login -u _your-username_ https://quay.io/_your-repo_*
 Password:
 Login Succeeded!
 ----
@@ -361,7 +358,7 @@ STEP 3: COMMIT quay.io/_your-repo_/_image-name_:latest
 
 [subs=+quotes]
 ----
-[user@host ~]$ *podman push quay.io/_your-repo/_image-name_:latest*
+[user@host ~]$ *podman push quay.io/_your-repo_/_image-name_:latest*
 Getting image source signatures
 Copying blob ...
 ...output omitted...
