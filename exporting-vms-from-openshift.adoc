@@ -136,7 +136,7 @@ spec:
 ----
 
 4.5) Save your changes and exit the editor.
-Include below is an example of a completed `deployment-exporter.yaml` for a block volume PVC in a `test-vms` namespace in a ROL OpenShift cluster.
+Included below is an example of a completed `deployment-exporter.yaml` for a block volume PVC in a `test-vms` namespace in a ROL OpenShift cluster.
 
 [subs=+quotes]
 ----
