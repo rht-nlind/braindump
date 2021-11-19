@@ -322,7 +322,7 @@ cluster_size: 65536
 You now have a local copy of your vm's disk.
 
 === Next Steps
-If your vm's disk does not need further adjustments, create a container image of your VM disk and then upload the disk image to Quay.
+If your vm's disk does require further adjustments, create a container image of your VM disk and then upload the disk image to Quay.
 
 
 1) Create a Dockerfile with the following content:

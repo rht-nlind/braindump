@@ -196,7 +196,7 @@ To sparsify the disk image without creating an additional disk image, use the `v
 [user@host ~]$ *virt-sparsify --in-place _new-image_.qcow2.*
 ----
 
-.Example
+.Example:
 [subs=+quotes]
 ----
 [user@host ~]$ *virt-sparsify --in-place helloworld.qcow2*
@@ -211,7 +211,7 @@ To sparsify the disk image without creating an additional disk image, use the `v
 [user@host ~]$ *qemu-img info _new-image_.qcow2*
 ----
 
-.Example 
+.Example: 
 [subs=+quotes]
 ----
 [user@host ~]$ *qemu-img info helloworld.qcow2* 
