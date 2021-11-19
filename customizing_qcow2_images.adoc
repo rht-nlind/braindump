@@ -1,0 +1,388 @@
+= Customizing QCOW2 Images
+
+Modify QCOW2 disk images from the command line with `libguestfs-tools`. 
+For more information on available commands, visit https://libguestfs.org/. 
+
+== Prerequisites:
+
+* libguestfs-tools installed 
+* wget
+
+[role='Checklist']
+== Instructions
+
+1) Download the base cloud image to your local system.
+
+[subs=+quotes]
+----
+[user@host ~]$ *wget https://download.fedoraproject.org/pub/fedora/linux/releases/34/Cloud/x86_64/images/Fedora-Cloud-Base-34-1.2.x86_64.qcow2*
+----
+
+2) Determine the image size and partitions.
+
+2.1) Use the `qemu-img info` command to determine the image size.
+
+[subs=+quotes]
+----
+[user@host ~]$ *qemu-img info _image_.qcow2*
+----
+
+.Example: 
+[subs=+quotes]
+----
+[user@host ~]$ *qemu-img info Fedora-Cloud-Base-34-1.2.x86_64.qcow2* 
+image: Fedora-Cloud-Base-34-1.2.x86_64.qcow2
+file format: qcow2
+virtual size: 5 GiB (5368709120 bytes)
+disk size: 249 MiB
+cluster_size: 65536
+Format specific information:
+    compat: 0.10
+    refcount bits: 16
+----
+
+2.2) Observe the disk and filesystem layout of the image with the `virt-filesystems` command.
+
+[subs=+quotes]
+----
+[user@host ~]$ *virt-filesystems --long -h --all -a _image_.qcow2*
+----
+
+.Example:
+[subs=+quotes]
+----
+[user@host ~]$ *virt-filesystems --long -h --all -a Fedora-Cloud-Base-34-1.2.x86_64.qcow2* 
+Name       Type        VFS   Label  MBR  Size  Parent
+/dev/sda1  filesystem  ext4  -      -    5.0G  -
+/dev/sda1  partition   -     -      83   5.0G  /dev/sda
+/dev/sda   device      -     -      -    5.0G  -
+----
+
+
+3) If desired, resize the image and identified partitions. 
+
+3.1) To resize the image, you must first create a new image with the desired size and name. 
+Create a new qcow2 image with the `qemu-img create` command.
+Specify the format with the `-f qcow2` flag. 
+
+[subs=+quotes]
+----
+[user@host ~]$ *qemu-img create -f qcow2 _new-image_.qcow2 _size_ G*
+----
+
+.Example:
+[subs=+quotes]
+----
+[user@host ~]$ *qemu-img create -f qcow2 helloworld.qcow2 10G*
+Formatting 'helloworld.qcow2', fmt=qcow2 size=10737418240 cluster_size=65536 lazy_refcounts=off refcount_bits=16
+----
+
+3.2) Expand the `/dev/sda1` partition of the original image using the newly created qcow2 image with the `virt-resize` command and the `--expand` option.
+This will copy the contents of the original image to the new image and expand the partition.
+
+[subs=+quotes]
+----
+[user@host ~]$ *virt-resize --expand /dev/sda1 _image_.qcow2 _new-image_.qcow2*
+----
+
+
+.Example:
+[subs=+quotes]
+----
+[user@host ~]$ *virt-resize --expand /dev/sda1 Fedora-Cloud-Base-34-1.2.x86_64.qcow2 helloworld.qcow2* 
+[   0.0] Examining Fedora-Cloud-Base-34-1.2.x86_64.qcow2
+Summary of changes:
+/dev/sda1: This partition will be resized from 5.0G to 10.0G.  The 
+filesystem ext4 on /dev/sda1 will be expanded using the ‘resize2fs’ 
+method.
+[   1.3] Setting up initial partition table on helloworld.qcow2
+[   1.8] Copying /dev/sda1
+ 100% ⟦▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒⟧ 00:00
+[   6.2] Expanding /dev/sda1 using the ‘resize2fs’ method
+Resize operation completed with no errors.  Before deleting the old disk, 
+carefully check that the resized disk boots and works correctly.
+----
+
+
+3.3) Confirm the partition size with the `virt-filesystems` command.
+
+[subs=+quotes]
+----
+[user@host ~]$ *virt-filesystems --long -h --all -a _new-image_.qcow2*
+----
+
+.Example:
+[subs=+quotes]
+----
+[user@host ~]$ *virt-filesystems --long -h --all -a helloworld.qcow2* 
+Name       Type        VFS   Label  MBR  Size  Parent
+/dev/sda1  filesystem  ext4  -      -    10G   -
+/dev/sda1  partition   -     -      83   10G   /dev/sda
+/dev/sda   device      -     -      -    10G   -
+----
+
+4) Set the root password with the `virt-customize` command and the `--rootpassword` option.
+
+[subs=+quotes]
+----
+[user@host ~]$ *virt-customize -a _new-image_.qcow2 --root-password passsword:PASSWORD*
+----
+
+.Example: 
+[subs=+quotes]
+----
+[user@host ~]$ *virt-customize -a helloworld.qcow2 --root-password password:redhat*
+[   0.0] Examining the guest ...
+[   3.6] Setting a random seed
+[   3.7] Setting the machine ID in /etc/machine-id
+[   3.7] Setting passwords
+[   4.7] Finishing off
+----
+
+5) Install packages with the `virt-customize` command.
+
+[subs=+quotes]
+----
+[user@host ~]$ *virt-customize -a _new-image_.qcow2 --install [_packages_]*
+----
+
+.Example:
+[subs=+quotes]
+----
+[user@host ~]$ *virt-customize -a helloworld.qcow2 --install httpd*
+[   0.0] Examining the guest ...
+[   3.6] Setting a random seed
+[   3.6] Installing packages: httpd
+[  70.6] Finishing off
+----
+
+6) Free up disk space within the image with the `virt-sparsify` command. 
+
+
+6.1) Observe the size of the image before sparsifying the disk image with the `qemu-img info` command.
+
+[subs=+quotes]
+----
+[user@host ~]$ *qemu-img info _new-image_.qcow2*
+----
+
+.Example
+[subs=+quotes]
+----
+[user@host ~]$ *qemu-img info helloworld.qcow2*
+image: helloworld.qcow2
+file format: qcow2
+virtual size: 10 GiB (10737418240 bytes)
+disk size: 1.12 GiB
+cluster_size: 65536
+Format specific information:
+    compat: 1.1
+    lazy refcounts: false
+    refcount bits: 16
+    corrupt: false
+----
+
+6.2) By default, `virt-sparsify` will copy the contents of the original disk image (_in-disk_) to a new sparse, or thin provisioned, disk image (_out-disk_). 
+
+[subs=+quotes]
+----
+[user@host ~]$ *virt-sparsify [--options] _in-disk_ _out-disk_*
+----
+
+To sparsify the disk image without creating an additional disk image, use the `virt-sparsify` command with the `--in-place` option.
+
+[subs=+quotes]
+----
+[user@host ~]$ *virt-sparsify --in-place _new-image_.qcow2.*
+----
+
+.Example
+[subs=+quotes]
+----
+[user@host ~]$ *virt-sparsify --in-place helloworld.qcow2*
+[   1.1] Trimming /dev/sda1
+[   1.2] Sparsify in-place operation completed with no errors
+----
+
+6.3) Observe the new image size after sparsifying with the `qemu-img info` command.
+
+[subs=+quotes]
+----
+[user@host ~]$ *qemu-img info _new-image_.qcow2*
+----
+
+.Example 
+[subs=+quotes]
+----
+[user@host ~]$ *qemu-img info helloworld.qcow2* 
+image: helloworld.qcow2
+file format: qcow2
+virtual size: 10 GiB (10737418240 bytes)
+disk size: 949 MiB
+cluster_size: 65536
+Format specific information:
+    compat: 1.1
+    lazy refcounts: false
+    refcount bits: 16
+    corrupt: false
+----
+
+== Other Modifications
+Below are additional commands that may help with customizing your disk images.
+
+=== Copy a file/directory to an image
+Copy files or directories into an image with the `virt-copy-in` or `virt-customize` commands. 
+
+[subs=+quotes]
+----
+[user@host ~]$ *virt-copy-in -a _new-image_.qcow2 _source_ _destination_*
+----
+[subs=+quotes]
+----
+[user@host ~]$ *virt-customize -a _new-image_.qcow2 --upload _source_:_destination_*
+----
+
+.Example:
+[subs=+quotes]
+----
+[user@host ~]$ *virt-copy-in -a helloworld.qcow2 index.html /var/www/html/*
+
+[user@host ~]$ *virt-customize -a helloworld.qcow2 --upload index.html:/var/www/html/*
+[   0.0] Examining the guest ...
+[   3.7] Setting a random seed
+[   3.8] Uploading: index.html to /var/www/html/
+[   3.8] Finishing off
+----
+
+=== Run commands or remove files on an image with the `virt-customize` command.
+
+[subs=+quotes]
+----
+[user@host ~]$ *virt-customize -a _new-image_.qcow2 --run-command '_command_'*
+----
+
+.Example:
+[subs=+quotes]
+----
+[user@host ~]$ *virt-customize -a helloworld.qcow2 --run-command 'rm /var/www/html/index.html'*
+[   0.0] Examining the guest ...
+[   3.7] Setting a random seed
+[   3.7] Running: rm /var/www/html/index.html
+[   3.8] Finishing off
+----
+
+=== List contents of a directory on an image with the `virt-ls` command.
+
+[subs=+quotes]
+----
+[user@host ~]$ *virt-ls -a _new-image_.qcow2 _/path/to/directory_*
+----
+
+.Example:
+[subs=+quotes]
+----
+[user@host ~]$ *virt-ls -a helloworld.qcow2 /etc*
+.pwd.lock
+.updated
+DIR_COLORS
+DIR_COLORS.lightbgcolor
+GREP_COLORS
+NetworkManager
+...output omitted...
+----
+
+=== Display contents of a file on the image with the `virt-cat` command.
+
+[subs=+quotes]
+----
+[user@host ~]$ *virt-cat -a _new-image_.qcow2 _/path/to/file_*
+----
+
+.Example:
+[subs=+quotes]
+----
+[user@host ~]$ *virt-cat -a helloworld.qcow2 /etc/dummy*
+dummy
+----
+
+=== Edit files on the image with the `virt-edit` command.
+Use your local editor to modify a file or edit the file non-interactively with the `virt-edit` command.
+Confirm the change afterwards with the `virt-cat` command.
+
+
+==== Interactive/local editor:
+[subs=+quotes]
+----
+[user@host ~]$ *virt-edit -a _new-image_.qcow2 _/path/to/file_*
+----
+
+.Example:
+[subs=+quotes]
+----
+[user@host ~]$ *virt-edit -a helloworld.qcow2 /etc/bashrc*
+
+# /etc/bashrc
+
+# System wide functions and aliases
+# Environment stuff goes in /etc/profile
+...output trimmed...
+----
+
+==== Non-interactive:
+[subs=+quotes]
+----
+[user@host ~]$ *virt-edit -a _new-image_.qcow2 -e 's/_original-text_/_new-text_/' _/path/to/file_*
+----
+
+.Example:
+[subs=+quotes]
+----
+[user@host ~]$ *virt-edit -a helloworld.qcow2 -e 's/dummy/foo/' /etc/dummy*
+[user@host ~]$ *virt-cat -a helloworld.qcow2 /etc/dummy*
+foo
+----
+
+=== Uninstall Cloud-Init with the `virt-customize` command.
+After customizing the image, use `virt-customize` to remove `cloud-init`. This may help with customization issues in OpenShift Virtualization. 
+
+[subs=+quotes]
+----
+[user@host ~]$ *virt-customize -a _new-image_.qcow2 --uninstall cloud-init* 
+----
+
+.Example:
+[subs=+quotes]
+----
+[user@host ~]$ *virt-customize -a helloworld.qcow2 --uninstall cloud-init*
+[   0.0] Examining the guest ...
+[   8.3] Setting a random seed
+[   8.3] Uninstalling packages: cloud-init
+[  10.0] Finishing off
+----
+
+=== Prepare the disk image for new environments with the `virt-sysprep` command. 
+To run sysprep on the disk image, use the `virt-sysprep` command and include the `--operations` option. 
+For a list of available operations, run `virt-sysprep --list-options`
+
+[subs=+quotes]
+----
+[user@host ~]$ *virt-sysprep -a _new-image_.qcow2 --operations _operation_*
+----
+[subs=+quotes]
+----
+[user@host ~]$ *virt-sysprep --list-operations*
+abrt-data * Remove the crash data generated by ABRT
+backup-files * Remove the editor backup files from the guest
+bash-history * Remove the bash history in the guest
+...output omitted..
+----
+
+.Example:
+[subs=+quotes]
+----
+[user@host ~]$ *virt-sysprep -a helloworld.qcow2 --operations bash-history,logfiles,ssh-hostkeys*
+[   0.0] Examining the guest ...
+[   2.8] Performing "bash-history" ...
+[   2.9] Performing "logfiles" ...
+[   3.0] Performing "ssh-hostkeys"...
+----

@@ -1,0 +1,370 @@
+= Exporting VMs from OpenShift Virtualization
+
+The native ability to export OpenShift Virtualization virtual machines disk images is currently under development. https://issues.redhat.com/browse/CNV-14174
+
+Until that time, there is a workaround provided by Adam Litke of the OpenShift Virtualization team.
+
+https://github.com/aglitke/vm-exporter
+
+Use `VM-Exporter` to download a powered off vm's disk image from its underlying PVC.
+Modify `deployment-exporter.yaml` to suit your environment. 
+Retrieve a RAW image of the vm's disk with the created route.
+The RAW image is formatted with xz compression for efficient over wire transmission.
+Decompress the file locally and use the `qemu-img convert` command to convert the file to QCOW2.
+This is not recommended for customers.
+
+== Prerequisites:
+* VM is powered off.
+* The PVC name and the volumeMode for the vm is known.
+* The exporter must be deployed to the vm's project.
+* Sufficient local storage for downloading and decompressing the RAW image.
+
+== Instructions:
+
+1) Clone or download https://github.com/aglitke/vm-exporter to your workstation. 
+
+[subs=+quotes]
+----
+[student@workstation ~] *git clone https://github.com/aglitke/vm-exporter*
+----
+
+2) Navigate to the `vm-exporter-main` directory. 
+
+[subs=+quotes]
+----
+[student@workstation ~] *cd ~/vm-exporter-main*
+----
+
+3) Use your preferred editor to open `deployment-exporter.yaml`. 
+
+[subs=+quotes]
+----
+[student@workstation vm-exporter-main]$ *vi deployment-exporter.yaml*
+----
+
+4) Modify `deployment-exporter.yaml` to suit your environment.
+
+4.1) Update the `namespace` objects for the deployment, service, and route. 
+
+[subs=+quotes]
+----
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vm-exporter
+  namespace: _<NAMESPACE>_
+...output omitted...
+apiVersion: v1
+kind: Service
+metadata:
+  name: vm-exporter
+  namespace: _<NAMESPACE>_
+...output omitted...
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  annotations:
+    openshift.io/host.generated: "true"
+  name: vm-exporter
+  namespace: _<NAMESPACE>_
+----
+
+4.2) Update the deployment `claimName` object (`.spec.template.spec.volumes.persistentVolumeClaim.claimName`) to the name of your vm's PVC. 
+
+[subs=+quotes]
+----
+...output omitted...
+ volumes:
+      - name: vm-disk
+        persistentVolumeClaim:
+          claimName: _<PVC-NAME>_
+----
+
+4.3) If the PVC uses block volume mode, modify the deployment `volumeMounts` and `mountPath` objects to `volumeDevices` and `devicePath` respectively. The `devicePath` will point to _/dev/vmdisk_.
+
+.Deployment for a filesystem volume mode PVC
+[subs=+quotes]
+----
+...output omitted...
+  spec:
+    containers:
+    - name: exporter
+...output omitted...
+      volumeMounts:                <1>
+      - mountPath: /data           <2>
+        name: vm-disk
+    volumes:
+    - name: vm-disk
+...output omitted...
+----
+.Deployment for a block volume mode PVC
+[subs=+quotes]
+----
+...output omitted...
+  spec:
+    containers:
+    - name: exporter
+...output omitted...
+      volumeDevices:               <3>
+      - devicePath: /dev/vmdisk    <4>
+        name: vm-disk
+    volumes:
+    - name: vm-disk
+...output omitted...
+----
+----
+<1> Use `volumeMounts` if the PVC uses filesystem volume mode. 
+<2> Use `mountPath: /data` if the PVC uses filesystem volume mode.
+<3> Use `volumeDevices` if the PVC uses block volume mode.
+<4> Use `devicePath: /dev/vmdisk` if the PVC uses block volume mode. 
+----
+
+4.4) Update the `spec.host` object for the route to point to your namespace and cluster. 
+
+[subs=+quotes,+macros]
+----
+apiVersion: route.openshift.io/v1
+kind: Route:
+...output omitted...
+spec:
+  host: vm-exporter-*_NAMESPACE_*.apps.*_ocp4_*.example.com    <1>
+    port:
+...output omitted...
+----
+----
+<1> Update the namespace and include "ocp4" in the path to reflect a ROL cluster.
+----
+
+4.5) Save your changes and exit the editor.
+Include below is an example of a completed `deployment-exporter.yaml` for a block volume PVC in a `test-vms` namespace in a ROL OpenShift cluster.
+
+[subs=+quotes]
+----
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vm-exporter
+  namespace: test-vms
+spec:
+  selector:
+    matchLabels:
+      app: vm-exporter
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: vm-exporter
+    spec:
+      containers:
+      - name: exporter
+        image: quay.io/alitke/vm-exporter
+        resources:
+          requests:
+            memory: 100Mi
+            cpu: 0.2
+        ports:
+        - name: http
+          containerPort: 8080
+        env:
+        - name: "PORT"
+          value: "8080"
+        - name: "DISK_FILE"
+          value: "/data/disk.img"
+        volumeDevices:
+        - devicePath: /dev/vmdisk
+          name: vm-disk
+      volumes:
+      - name: vm-disk
+        persistentVolumeClaim:
+          claimName: helloworld-rootdisk-p42c2
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vm-exporter
+  namespace: test-vms
+spec:
+  ipFamilies:
+  - IPv4
+  ipFamilyPolicy: SingleStack
+  ports:
+  - port: 80
+    protocol: TCP
+    targetPort: 8080
+    name: http
+  selector:
+    app: vm-exporter
+  sessionAffinity: None
+  type: NodePort
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  annotations:
+    openshift.io/host.generated: "true"
+  name: vm-exporter
+  namespace: test-vms
+spec:
+  host: vm-exporter-test-vms.apps.ocp4.example.com
+  port:
+    targetPort: http
+  to:
+    kind: Service
+    name: vm-exporter
+    weight: 100
+  wildcardPolicy: None
+----
+
+5) Use `oc create -f deployment-exporter.yaml` to create the deployment, service, and route.
+
+[subs=+quotes]
+----
+[student@workstation vm-exporter-main]$ *oc create -f deployment-exporter.yaml*
+deployment.apps/vm-exporter created
+service/vm-exporter created
+route.route.openshift.io/vm-exporter created
+----
+
+6) Confirm the vm-exporter pod is running with `oc get pods`. 
+
+[subs=+quotes]
+----
+[studen@workstation vm-exporter-main]$ *oc get pods*
+NAME                    READY  STATUS    RESTARTS  AGE
+vm-exporter-66c...wrg   1/1    Running   0         2m57s
+----
+
+7) Use the `wget` command to download the compressed RAW disk image. 
+Be sure to save the file with the `.img.xz` extension.
+
+7.1) Retrieve the route with `oc get route`.
+
+[subs=+quotes]
+----
+[student@workstation vm-exporter-main]$ *oc get route*
+NAME         HOST/PORT                                   PATH  SERVICES     PORT  TERMINATION  WILDCARD
+vm-exporter  vm-exporter-test-vms.apps.ocp4.example.com        vm-exporter  http               None
+----
+
+7.2) Download and rename the compressed RAW disk image with the `wget` command and the `-O` option.
+Include the `.img.xz` extension in the file name.
+This may take several minutes to complete.
+
+[subs=+quotes]
+----
+[student@workstation vm-exporter-main]$ *wget -O _image-name_.img.xz \
+http://vm-exporter-_NAMESPACE_.apps._ocp4_.example.com*
+----
+
+8) Decompress the RAW image with the `unxz` command. 
+This may take several minutes to complete.
+
+[subs=+quotes]
+----
+[student@workstation vm-exporter-main]$ *unxz _image-name_.img.xz*
+----
+
+9) Convert the RAW image to QCOW2 format with the `qemu-img convert' command. 
+Specify the file input as RAW with the `-f raw` flag.
+Specify the file output as QCOW2 with the `-O qcow2` flag.
+
+[subs=+quotes]
+----
+[student@workstation vm-exporter-main]$ *qemu-img convert -f raw -O qcow2 _image-name_.img _image-name_.qcow2*
+----
+
+10) Confirm the QCOW2 image disk and virtual sizes with the `qemu-img info` command.
+
+[subs=+quotes]
+----
+[student@workstation vm-exporter-main]$ *qemu-img info _image-name_.qcow2*
+image: /home/student/vm-exporter/_image-name_.qcow2
+file format: qcow2
+virtual size: 10 GiB (10737418240 bytes)
+disk size: 949 MiB
+cluster_size: 65536
+...output omitted...
+----
+
+11) Reduce the disk size by compressing the QCOW2 image with the `qemu-img convert` command.
+
+11.1) Create a backup of the QCOW2 disk image.
+
+[subs=+quotes]
+----
+[student@workstation vm-exporter-main]$ *cp _image-name_.qcow2 _image-name_.qcow2_backup*
+----
+
+11.2) Use the `qemu-img convert` command to shrink the disk with compression.
+Specify the output as QCOW2 with the `-O qcow2` flag.
+Compress the disk image with the `-c` flag.
+Use the `_image-name_.qcow2_backup` as the input.
+
+[subs=+quotes]
+----
+[student@workstation vm-exporter-main]$ *qemu-img convert -O qcow2 -c _image-name_.qcow2_backup _image-name_.qcow2*
+----
+
+11.3) Confirm the new disk size with the `qemu-img info` command. 
+
+[subs=+quotes]
+----
+[student@workstation vm-exporter-main]$ *qemu-img info _image-name_.qcow2*
+image: /home/student/vm-exporter/_image-name_.qcow2
+file format: qcow2
+virtual size: 10 GiB (10737418240 bytes)
+disk size: 454 MiB
+cluster_size: 65536
+...output omitted...
+----
+
+You now have a local copy of your vm's disk.
+
+=== Next Steps
+If your vm's disk does not need further adjustments, create a container image of your VM disk and then upload the disk image to Quay.
+
+
+1) Create a Dockerfile with the following content:
+
+[subs=+quotes]
+----
+FROM scratch
+ADD --chown=107:107 _/path/to/image_.qcow2 /disk    <1>
+----
+----
+<1> The flag `--chown=107:107` sets the file owner as the QEMU user (107) and prevents "permission denied" errors from occuring during container disk creation. 
+----
+
+
+2) Log in to your Quay repository with the `podman` command
+
+[subs=+quotes]
+----
+[user@host ~]$ *podman login -u _username_ https://quay.io/_your-repo_*
+Password:
+Login Succeeded!
+----
+
+3) Build a local container image with the `podman build` command.
+Specify the path to the Dockerfile or use `.` if the Dockerfile is in the current working directory.
+
+[subs=+quotes]
+----
+[user@host ~]$ *podman build -t quay.io/_your-repo_/_image-name_:latest .*
+STEP 1: FROM scratch
+STEP 2: ADD --chown=107:107 _/path/to/image_.qcow2 /disk
+STEP 3: COMMIT quay.io/_your-repo_/_image-name_:latest
+----
+
+4) Push the container image to your repo with the `podman push` command.
+
+[subs=+quotes]
+----
+[user@host ~]$ *podman push quay.io/_your-repo/_image-name_:latest*
+Getting image source signatures
+Copying blob ...
+...output omitted...
+Writing manifest to image destination 
+Storing Signatures
+----
