@@ -235,10 +235,25 @@ NAME                    READY  STATUS    RESTARTS  AGE
 vm-exporter-66c...wrg   1/1    Running   0         2m57s
 ----
 
-7) Use the `wget` command to download the compressed RAW disk image. 
+7) Create a new application from the `vm-exporter` source code. 
+This will copy the vm PVC to the `vm-exporter` pod. 
+Name the application `vm-exporter-app`.
+
+[subs=+quotes]
+----
+[student@workstation vm-exporter-main] *oc new-app https://github.com/aglitke/vm-exporter \
+--name=vm-exporter-app*
+---> Found container image c60150b (13 hours old) from quay.io for "quay.io/bitnami/python"
+...output omitted...
+--> Success
+    Build scheduled, use 'oc logs -f buildconfig/vm-exporter-app' to track its progress.
+...output omitted...
+----
+
+8) Use the `wget` command to download the compressed RAW disk image. 
 Be sure to save the file with the `.img.xz` extension.
 
-7.1) Set the route host name to a variable with `oc get route`.
+8.1) Set the route host name to a variable with `oc get route`.
 
 [subs=+quotes]
 ----
@@ -246,7 +261,7 @@ Be sure to save the file with the `.img.xz` extension.
 -o jsonpath='{.spec.host}')*
 ----
 
-7.2) Download and rename the compressed RAW disk image with the `wget` command and the `-O` option.
+8.2) Download and rename the compressed RAW disk image with the `wget` command and the `-O` option.
 Include the `.img.xz` extension in the file name.
 This may take several minutes to complete.
 
@@ -255,7 +270,7 @@ This may take several minutes to complete.
 [student@workstation vm-exporter-main]$ *wget -O _image-name_.img.xz $ROUTE_NAME*
 ----
 
-8) Decompress the RAW image with the `unxz` command. 
+9) Decompress the RAW image with the `unxz` command. 
 This may take several minutes to complete.
 
 [subs=+quotes]
@@ -263,7 +278,7 @@ This may take several minutes to complete.
 [student@workstation vm-exporter-main]$ *unxz _image-name_.img.xz*
 ----
 
-9) Convert the RAW image to QCOW2 format with the `qemu-img convert' command. 
+10) Convert the RAW image to QCOW2 format with the `qemu-img convert' command. 
 Specify the file input as RAW with the `-f raw` flag.
 Specify the file output as QCOW2 with the `-O qcow2` flag.
 
@@ -272,7 +287,7 @@ Specify the file output as QCOW2 with the `-O qcow2` flag.
 [student@workstation vm-exporter-main]$ *qemu-img convert -f raw -O qcow2 _image-name_.img _image-name_.qcow2*
 ----
 
-10) Confirm the QCOW2 image disk and virtual sizes with the `qemu-img info` command.
+11) Confirm the QCOW2 image disk and virtual sizes with the `qemu-img info` command.
 
 [subs=+quotes]
 ----
@@ -285,16 +300,16 @@ cluster_size: 65536
 ...output omitted...
 ----
 
-11) Reduce the disk size by compressing the QCOW2 image with the `qemu-img convert` command.
+12) Reduce the disk size by compressing the QCOW2 image with the `qemu-img convert` command.
 
-11.1) Create a backup of the QCOW2 disk image.
+12.1) Create a backup of the QCOW2 disk image.
 
 [subs=+quotes]
 ----
 [student@workstation vm-exporter-main]$ *cp _image-name_.qcow2 _image-name_.qcow2_backup*
 ----
 
-11.2) Use the `qemu-img convert` command to shrink the disk with compression.
+12.2) Use the `qemu-img convert` command to shrink the disk with compression.
 Specify the output as QCOW2 with the `-O qcow2` flag.
 Compress the disk image with the `-c` flag.
 Use the `_image-name_.qcow2_backup` as the input.
@@ -304,7 +319,7 @@ Use the `_image-name_.qcow2_backup` as the input.
 [student@workstation vm-exporter-main]$ *qemu-img convert -O qcow2 -c _image-name_.qcow2_backup _image-name_.qcow2*
 ----
 
-11.3) Confirm the new disk size with the `qemu-img info` command. 
+12.3) Confirm the new disk size with the `qemu-img info` command. 
 
 [subs=+quotes]
 ----
@@ -326,11 +341,19 @@ If your vm's disk does not require further adjustments, create a container image
 
 [subs=+quotes]
 ----
+FROM registry.access.redhat.com/ubi8/ubi:latest AS builder     <1>
+ADD --chown=107:107 _/path/to/image_.qcow2 /disk/    <2>
+RUN chmod 0440 /disk/*     <3>
+
 FROM scratch
-ADD --chown=107:107 _/path/to/image_.qcow2 /disk    <1>
+COPY --from=builder /disk/* /disk/   <4>
+
 ----
 ----
-<1> The flag `--chown=107:107` sets the file owner as the QEMU user (107) and prevents "permission denied" errors from occuring during container disk creation. 
+<1> The Red Hat Universal Base Image (UBI) is used as the image builder to run needed configuration changes.
+<2> The flag `--chown=107:107` sets the file owner as the QEMU user (107) and prevents "permission denied" errors from occuring during container disk creation. 
+<3> Permissions to the `/disk/` directory must be set to 0440.
+<4> Changes are then stored in the minimal scratch image. 
 ----
 
 
@@ -349,9 +372,16 @@ Specify the path to the Dockerfile or use `.` if the Dockerfile is in the curren
 [subs=+quotes]
 ----
 [user@host ~]$ *podman build -t quay.io/_your-repo_/_image-name_:latest .*
-STEP 1: FROM scratch
-STEP 2: ADD --chown=107:107 _/path/to/image_.qcow2 /disk
-STEP 3: COMMIT quay.io/_your-repo_/_image-name_:latest
+STEP 1: FROM registry.access.redhat.com/ubi8/ubi:latest AS builder
+Getting image source signatures
+...output omitted...
+STEP 2: ADD --chown=107:107 _/path/to/image_.qcow2 /disk/
+--> 81e41f3be49
+STEP 3: RUN chmod 0440 /disk/*
+STEP 4: FROM scratch
+STEP 5: COPY --from-builder /disk/* /disk/
+STEP 6: COMMIT quay.io/_your-repo_/_image-name_
+...output omitted...
 ----
 
 4) Push the container image to your repo with the `podman push` command.

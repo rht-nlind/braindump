@@ -156,6 +156,14 @@ Name       Type        VFS   Label  MBR  Size  Parent
 [  70.6] Finishing off
 ----
 
+[NOTE]
+====
+Be aware that packages will be installed as the `root` user.
+You may need to change file or directory ownership or permissions for the package after installation.
+For example, setting the user/group `apache:apache` as the owner of `/var/www/html/`.
+Refer to the "Run Commands, Scripts, or Remove files on an Image" section for more information on running commands against an image. 
+====
+
 6) Free up disk space within the image with the `virt-sparsify` command. 
 
 
