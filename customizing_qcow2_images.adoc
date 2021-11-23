@@ -415,7 +415,7 @@ Removing `cloud-init` will prevent OpenShift Virtualization from further modifyi
 
 === Prepare the Disk Image for New Environments (Sysprep)
 To run sysprep on the disk image, use the `virt-sysprep` command and include the `--operations` option. 
-For a list of available operations, run `virt-sysprep --list-options`
+For a list of available operations, run `virt-sysprep --list-operations`
 
 [subs=+quotes]
 ----

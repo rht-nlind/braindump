@@ -351,6 +351,7 @@ COPY --from=builder /disk/* /disk/   <4>
 ----
 ----
 <1> The Red Hat Universal Base Image (UBI) is used as the image builder to run needed configuration changes.
+Other base images may be used as the image builder, such as `registry.fedoraproject.org/fedora:34`. 
 <2> The flag `--chown=107:107` sets the file owner as the QEMU user (107) and prevents "permission denied" errors from occuring during container disk creation. 
 <3> Permissions to the `/disk/` directory must be set to 0440.
 <4> Changes are then stored in the minimal scratch image. 
