@@ -158,10 +158,24 @@ Name       Type        VFS   Label  MBR  Size  Parent
 
 [NOTE]
 ====
+If using a RHEL QCOW2 image, you must first register the system to enable repos for packages.
+
+[subs=+quotes]
+----
+[user@host ~}$ *virt-customize -a _new-image_.qcow2 --sm-credentials \ '_your-rh-login_@_email_:password:<your-password>' --sm-register --sm-attach auto*
+----
+
 Be aware that packages will be installed as the `root` user.
 You may need to change file or directory ownership or permissions for the package after installation.
 For example, setting the user/group `apache:apache` as the owner of `/var/www/html/`.
 Refer to the "Run Commands, Scripts, or Remove files on an Image" section for more information on running commands against an image. 
+
+You may also wish to use the `--selinux-relabel` flag to have SELinux relabel the system after installing packages. 
+
+[subs=+quotes]
+----
+[user@host ~}$ *virt-customize -a _new-image_.qcow2 --install [_packages_] --selinux-relabel*
+----
 ====
 
 6) Free up disk space within the image with the `virt-sparsify` command. 
@@ -233,6 +247,27 @@ Format specific information:
     lazy refcounts: false
     refcount bits: 16
     corrupt: false
+----
+
+7) If using a RHEL image, unregister the system after installing any needed packages or updates.
+
+[subs=+quotes]
+----
+[user@host ~]$ *virt-customize -a _new-image_.qcow2 --run-command 'subscription-manager remove --all'*
+[   0.0] Examining the guest ...
+[   4.6] Setting a random seed
+[   4.6] Running: subscription-manager remove --all
+[  21.3] Finishing off
+[user@host ~]$ *virt-customize -a _new-image_.qcow2 --run-command 'subscription-manager unregister'*
+[   0.0] Examining the guest ...
+[   5.6] Setting a random seed
+[   5.6] Running: subscription-manager unregister
+[   9.3] Finishing off
+[user@host ~]$ *virt-customize -a _new-image_.qcow2 --run-command 'subscription-manager clean'*
+[   0.0] Examining the guest ...
+[   4.6] Setting a random seed
+[   4.7] Running: subscription-manager clean
+[   7.0] Finishing off
 ----
 
 == Other Modifications
