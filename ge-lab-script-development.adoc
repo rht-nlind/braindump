@@ -1,0 +1,856 @@
+ifndef::backend-docbook5,backend-docbook45[:imagesdir: ../]
+[id='ge-lab-scripting']
+= GE Lab Scripts Development
+
+This guide documents the steps I have taken to develop `lab` scripts for the DO316 course GEs.
+
+== Prerequisites
+* A GitHub account with access to the *Red Hat Training GitHub Organization*
+* Access to *ROL Stage Environment* through your local browser
+* The `ravello_id_rsa` key saved to `~/.ssh/`
+* `Visual Studio Code` with the `Remote-SSH` extension installed and configured
+* `Remmina Remote Desktop` installed (Optional; available in the software catalog)
+
+This guide assumes `Remmina` will be used to connect to the classroom lab environment.
+`Remmina` helps me differeniate between development occuring on my local machine (where I use `Terminal`) and development occuring in the classroom. 
+This guide will not cover the steps to configure `Visual Studio Code` and the `Remote-SSH` extension.
+
+== Prepare the Environment
+1) Create or start the course lab environment within `ROL Stage`.
+Be sure to adjust the `auto-stop` and `auto-destroy` timers.
+
+2) Connect to the `workstation` machine.
+
+2.1) Click btn:[OPEN CONSOLE] on the `workstation` machine.
+
+2.2) Log in as the `student` user and open `Terminal`.
+
+2.3) Determine the public IP address of `workstation`.
+
+[subs=+quotes]
+----
+[student@workstation ~]$ *curl ifconfig.me*
+150.239.52.227[student@workstation ~]$
+----
+
+`FIP Finder` may also be used to determine the IP address. 
+Refer to Curriculum Onboarding website for instructions regarding `FIP Finder`.
+
+2.4) From your laptop, update and save your `~/.ssh/config` and `Remmina` settings with the IP address
+
+[subs=+quotes]
+----
+[user@laptop ~]$ *vi ~/.ssh/config*
+----
+
+.Sample ~./ssh/config
+----
+Host workstation
+	User student
+	ProxyJump bastion
+
+Host bastion
+	HostName 172.25.252.1
+	User student
+	Port 53009
+	ProxyJump classroom
+    IdentityFile /home/user/.ssh/ravello_id.rsa
+
+Host classroom
+	Hostname 150.239.52.227
+	Port 22022
+	User instructor
+    IdentityFile /home/user/.ssh/ravello_id.rsa
+    PreferredAuthentications publickey
+    StrictHostKeyChecking no
+
+Host utility.lab.example.com
+	ProxyJump bastion
+	User lab
+
+Host idm.ocp4.example.com
+	ProxyJump workstation
+	User lab
+----
+
+[id='remmina-basic']
+. Remmina basic settings
+image::images/lab/remmina-workstation-basic.png[align="center",width="100%"]
+
+[id='remmina-ssh']
+. Remmina SSH tunnel settings
+image::images/lab/remmina-workstation-ssh-tunnel.png[align="center",width="100%"]
+
+2.5) Connect to `workstation` with `Remmina` and `Visual Studio Code`.
+
+3) Modify the Git configuration on `workstation` to reflect your name and email.
+
+[subs=+quotes]
+----
+[student@workstation ~]$ *git config --global user.name "<FirstName LastName>"*
+[student@workstation ~]$ *git config --global user.email "<your_email>@redhat.com"*
+----
+
+4) Clone the course and `rht-labs-core` git repos to `workstation`.
+You will need your GitHub email/username and personal access token.
+
+4.1) Clone the `rht-labs-core` repo.
+
+[subs=+quotes]
+----
+[student@workstation ~]$ *git clone https://github.com/RedHatTraining/rht-labs-core.git*
+----
+
+4.2) Clone the course repo and specify the destination directory using the course SKU in lower case (ex: do316).
+
+[subs=+quotes]
+----
+[student@workstation ~]$ *git clone https://github.com/RedHatTraining/DO316.git do316*
+----
+
+[NOTE]
+====
+You must specify the destination directory in lower case because GitHub will, by default, clone the repo to a directory with the same title casing as the repo name (ex: DO180).
+Lower case titling is required to prevent conflict with certain `lab` scripts that copy files to `workstation` for the `Student` user.
+These scripts specify the destination directory as the course SKU in title case.
+====
+
+4.3) Create a symbolic link for the course grading directory.
+
+[subs=+quotes]
+----
+[student@workstation ~]$ *ln -vs do316/classroom/grading ~/rht-labs-do316*
+----
+
+5) Create a branch in the course repo for your development
+[subs=+quotes]
+----
+[student@workstation ~]$ *cd do316*
+[student@workstation do316]$ *git checkout -b <branch_name>
+----
+
+[NOTE]
+====
+If a development branch already exists in the repo, use `git checkout -b <branch_name> origin/<branch_name>` to checkout the remote branch on `workstation`.
+====
+
+6) Prepare the virtual environment.
+
+6.1) Install `make` on `workstation`.
+[subs=+quotes]
+----
+[student@workstation do316]$ *sudo dnf install make -y*
+----
+
+6.2) Change to the `rht-labs-core` directory and use the `make` command to create a virtual environment.
+
+[subs=+quotes]
+----
+[student@workstation do316]$ *cd ~/rht-labs-core*
+[student@workstation rht-labs-core]$ *make venv*
+python3 -m venv ~/.venv/labs && \
+source ~/.venv/labs/bin/activate && \
+  pip3 install --upgrade pip > pip-log.txt && \
+  pip3 install -r requirements.txt >> pip-log.txt && \
+deactivate
+Cache entry deserialization failed, entry ignored
+  Cache entry deserialization failed, entry ignored
+
+All done, execute 'source ~/.venv/labs/bin/activate' to enter the venv
+----
+
+6.3) Activate the virtual environment.
+[subs=+quotes]
+----
+[student@workstation rht-labs-core]$ *source ~/.venv/labs/bin/activate*
+(labs) [student@workstation rht-labs-core]$
+----
+
+6.4) Assign the PyPi server for the environment to a variable.
+This will prevent an error regarding the `rht-labs-ocp` version in the next step.
+
+DEV:
+[subs=+quotes]
+----
+(labs) [student@workstation rht-labs-core]$ *export PIP_EXTRA_INDEX_URL=https://pypi.apps.tools.dev.nextcle.com/repository/labs/simple/*
+----
+
+PROD:
+[subs=+quotes]
+----
+(labs) [student@workstation rht-labs-core]$ *export PIP_EXTRA_INDEX_URL=https://pypi.apps.tools-na.prod.nextcle.com/repository/labs/simple/*
+----
+
+6.5) Install rht-labs-core and course repos.
+
+[subs=+quotes]
+----
+(labs) [student@workstation rht-labs-core]$ *pip3 install -e .*
+Obtaining file:///home/student/rht-labs-core
+  Preparing metadata (setup.py) ... done
+...output omitted...
+Installing collected packages: rht-labs-core
+  Running setup.py develop for rht-labs-core
+Successfully installed rht-labs-core-2.7.1
+(labs) [student@workstation rht-labs-core]$ *cd ~/rht-labs-do316*
+(labs) [student@workstation rht-labs-do316]$ *pip3 install -e .*
+...output omitted...
+  Running setup.py develop for rht-labs-do316
+Successfully installed idna-ssl-1.1.0 rht-labs-do316-4.9.0 rht-labs-ocp-0.2.1
+----
+
+6.6) Select the course lab for the development environment.
+This will also update or create the `~/.grading/config.yaml` development configuration file. 
+
+[subs=+quotes]
+----
+(labs) [student@workstation rht-labs-do316]$ *lab select do316*
+----
+
+6.7) Use `make` to create a linter to test your code for good form.
+
+[subs=+quotes]
+----
+(labs) [student@workstation rht-labs-do316]$ *cd ~/rht-labs-core*
+(labs) [student@workstation rht-labs-core]$ *make lint*
+python -m flake8
+----
+
+Your environment is now ready to begin lab script development. 
+
+== Overview of the Script Development Process 
+
+The `~/rht-labs-do316/src/do316` directory contains the Python files for the course GEs.
+The files follow the `<chapterkeyword-sectionkeyword>.py` naming convention (ex: `network-external.py`).
+The content of the files is reflective of the active Git branch on `workstation`. 
+
+A generic template for each GE has been created already. 
+You will modify these templates for your lab scripts.
+Scripts may contain Python functions or reference Ansible playbooks.
+Don't forget to commit often.
+
+The general steps for script development are:
+1) Connect to `workstation` from `Visual Studio Code` 
+
+2) In `Visual Studio Code`, open the remote GE python file in the lab environment.
+This allows you to make changes to the script and have it immediately reflected in the virtual environment on `workstation`.
+
+3) Modify the GE python file to include tasks that:
+* Confirm the environment is ready and available.
+* Create or copy the files and resources needed in the cluster or on `workstation` for the exercise.
+* Call any needed Ansible playboooks
+* Cleanup the environment after the exercise is complete
+
+4) Run a linter to check for formatting errors in your Python code 
+* Use `flake8 __path/to/file.py__`to check for errors.
+* The site, https://www.flake8rules.com/, includes definitions for the various error codes and insights on correction.
+
+5) If using an Ansible, check for syntax errors in your defined playbook(s).
+* Use `ansible-playboook -i __/path/to/inventory__ --syntax-check __/path/to/playbook__` and correct any errors.
+* You can also use `ansible-playbook -c` to do a dry run of your playbook.
+
+6) Commit any changes and then run the `lab start` and `lab finish` commands on `workstation` to test functionality.
+
+7) Modify your script or playbooks as necessary and commit the changes.
+
+8) Run through your GE as the `student` user and adjust your GE and scripts as necessary.
+
+9) When satifisfied with your script, commit and push to the course repo.
+
+10) Deactivate the virtual environment when you are finished.
+
+=== Overview of Typical Script Content
+
+This section covers the items to notice or change in a typical lab script.
+The example script, `network-external.py` is broken into sections and includes admonitions that are not in the original file. 
+
+==== Copyright and Changelog 
+At the top of the script, you will find our copyright and change notices. 
+This section also includes a comment stating the intended course and GE.
+
+.Copyright and changelog
+[subs=+quotes,+macros,role='fileinput']
+----
+#
+# Copyright (c) 2021 Red Hat Training <training@redhat.com>
+#
+# All rights reserved.
+# No warranty, explicit or implied, provided.
+#
+# CHANGELOG
+# * Nov 25 2021 Andres Hernandez <andres.hernandez@redhat.com>
+#   - original code
+
+"""
+Grading module for DO316 network-external guided exercise.  <1>
+This module either does start, grading, or finish for the network-external guided exercise. <2>
+"""
+----
+<1> Specify the course SKU and the GE keywords in lower-case. 
+The keywords must match the titling of the the script file.
+<2> Include the GE keywords again.
+
+==== Imported Modules
+The next section imports various Python modules and functions into the script.
+Modules may include exectuable statements and definitions for variables and functions.
+Use `import` to import an entire module.
+Use `from` to import only certain classes (which may include data and functions) from a module.
+
+.Imported modules
+[subs=+quotes,+macros,role='fileinput']
+----
+import os
+import sys
+import logging
+import pkg_resources
+import requests
+import urllib3
+import yaml
+import time
+
+from requests.models import Response
+from urllib3 import disable_warnings
+from urllib3.exceptions import InsecureRequestWarning
+from ocp import api  <1>
+from ocp.utils import OpenShift  <2>
+from labs import labconfig
+from labs.common import labtools, userinterface
+
+# Import all the functions defined in the common.py module
+from do316 import common <3>
+----
+<1> This imports the functions specifed in `rht-labs-ocp/src/ocp/api.py`.
+Those functions will be used for cluster authentication.
+You can view the available functions in the `rht-labs-ocp` GitHub repository.
+<2> This imports the OpenShift class from `rht-labs-ocp/src/utils.py`.
+This class includes functions for cluster resource management.
+<3> This imports the functions in the `common.py` file located in the do316 repository.
+`common.py` installs OpenShirt Virtualization in the lab environment.
+Custom course functions that will be used by all GE scripts can be included in this file.
+
+==== GE Specific Settings
+The next section includes GE specific and default settings.
+
+.GE specific settings
+[subs=+quotes,+macros,role='fileinput']
+----
+# Course SKU
+SKU = labconfig.get_course_sku().upper()
+
+# List of hosts involved in that module. Before doing anything,
+# the module checks that they can be reached on the network
+_targets = [
+    "localhost",    <1>
+]
+
+# Default namespace for the resources
+NAMESPACE =  'web-servers'  <2>
+
+
+# Disable certificate validation
+disable_warnings(InsecureRequestWarning)
+
+
+# Change the class name to match your file name with WordCaps
+class NetworkExternal(OpenShift):   <3>
+    """
+    Network External GE script for DO316    <4>
+    """
+    __LAB__ = "network-external"    <5>
+
+    # Get the OCP host and port from environment variables  <6>
+    OCP_API = {
+        "user": os.environ.get("OCP_USER", "admin"),
+        "password": os.environ.get("OCP_PASSWORD", "redhat"),
+        "host": os.environ.get("OCP_HOST", "api.ocp4.example.com"),
+        "port": os.environ.get("OCP_PORT", "6443"),
+    }
+
+    # Initialize class
+    def __init__(self):
+        logging.debug("{} / {}".format(SKU, sys._getframe().f_code.co_name))
+        try:
+            super().__init__()
+        except Exception as e:
+            print("Error: %s" % e)
+            sys.exit(1)
+----
+<1> Leave the target as *"localhost"* for most lab scripts.
+<2> Specify the namespace for the GE. 
+This namespace will be checked for, created, and deleted in later sections.
+<3> This defines your script/functions as a class. 
+Be sure to follow WordCaps when naming the class.
+<4> Use the comment to specify the intended GE and course.
+<5> Be sure to include the GE keywords in lower case.
+<6> Leave this section as is to authenticate to the cluster.
+
+With those standard sections complete, you can now begin specifying the tasks that will be completed with the `lab` command.
+
+==== Example Task Outline
+Encapsulate tasks between {} braces and separate each task with a comma. 
+Within the task itself, use commas at the end of each line.
+
+.Outline of an example tasks
+[subs=+quotes]
+----
+            {
+                "label": "Checking lab systems",    <1>
+                "task": labtools.check_host_reachable, <2>
+                "hosts": _targets,  <3>
+                "fatal": True,  <4>
+            },
+----
+<1> "label" defines the task name and the message displayed to the student.
+<2> "task" defines the module and class or function used for the task. 
+<3> Provide values for arguments or variables required by the class or function.
+<4> Use `True` or `False` to specify if a failed task execution ends the `lab start` script.  
+
+==== Specifying Start Tasks
+In this section, you will specify the tasks executed by the `lab start` command.
+Tasks are executed in the order written. 
+Be sure to first execute tasks that confirm that the environment is ready for your GE.
+
+.Standard checks for cluster readiness
+[subs=+quotes,+macros,role='fileinput']
+----
+    def start(self): <1>
+        """
+        Prepare the system for starting the lab
+        """
+        logging.debug("{} / {}".format(SKU, sys._getframe().f_code.co_name))
+        items = [
+            {
+                "label": "Checking lab systems",    <2>
+                "task": labtools.check_host_reachable,
+                "hosts": _targets,
+                "fatal": True,
+            },
+            {
+                "label": "Pinging API", <3>
+                "task": self._start_ping_api,   <4>
+                "host": self.OCP_API["host"],
+                "fatal": True,
+            },
+            {
+                "label": "Checking API",    <5>
+                "task": self._start_check_api,
+                "host": self.OCP_API["host"],
+                "port": self.OCP_API["port"],
+                "fatal": True,
+            },
+            {
+                "label": "Checking cluster readiness",  <6>
+                "task": self._start_check_cluster_ready,
+                "fatal": True,
+            },
+----
+<1> This defines the `start` function and specifies the tasks executed by `lab start`.
+<2> This confirms that the target, `localhost`, is accessible.
+<3> This tests if the cluster API can receive network communication.
+<4> Use `self.<function_name>` to include any functions that are defined within the script file itself.
+<5> This confirms that the cluster is accessible via the API.
+<6> This confirms that the cluster itself is ready.
+
+With the cluster health confirmed, specify the remaining tasks for your `start` function.
+
+.GE start tasks
+[subs=+quotes,+macros,role='fileinput']
+----
+            {
+                "label": "Verifying OpenShift Virtualization Operator",
+                "task": common.openshift_virt, <1>
+                "oc_client": self.oc_client,
+                "fatal": True,
+            },
+            {
+                "label": "Confirming that the " + NAMESPACE + " project does not exist",    <2>
+                "task": self._check_ge_namespace,
+                "oc_client": self.oc_client,
+                "fatal": True,
+            },
+            {
+                "label": "Importing exercise disk images",  <3>
+                "task": self.run_playbook,  <4>
+                "playbook": "ansible/network-external/add-qcow2-imgs.yml",  <5>
+                "fatal": True,
+            },
+            {
+                "label": "Creating exercise resources",
+                "task": self.run_playbook,
+                "playbook": "ansible/network-external/hello-web-vm.yml",    <6>
+                "fatal": True,
+            },
+        ]
+        userinterface.Console(items).run_items(action="Starting")
+----
+<1> This task imports the `openshift_virt` function from `common.py`.
+This function ensures OpenShift Virtualization is installed. 
+<2> This confirms that the namespace for the GE doesn't exist in the cluster.
+<3> Include this task if you wish to import qcow2 images to Utility.
+This task will be removed once all course images are imported to Utility by Benja.
+<4> This specifies that Ansible will be used to perform the task.
+<5> Specify the relative path to the Ansible playbook.
+<6> This playbook creates the resources needed for the exercise.
+
+==== Specifying Grade and Finish Tasks
+You will then define the `grade` function and specify the tasks executed by the `lab grade` command.
+This step is necessary for the end of chapter labs and the course comprehensive review.
+It is not necessary for GEs.
+
+.Lab grade tasks
+[subs=+quotes,+macros,role='fileinput']
+----
+    def grade(self):
+        """
+        Perform evaluation steps on the system
+        """
+        logging.debug("{} / {}".format(SKU, sys._getframe().f_code.co_name))
+        items = [
+            {
+                "label": "Checking lab systems", <1>
+                "task": labtools.check_host_reachable,
+                "hosts": _targets,
+                "fatal": True,
+            },
+
+            {
+                "label": "Confirming external access to hello-web", <2>
+                "task": self.run_playbook,
+                "playbook": "ansible/network-external/route-check.yml",
+                "fatal": True,
+            },
+        ]
+        ui = userinterface.Console(items)
+        ui.run_items(action="Grading")
+        ui.report_grade()
+----
+<1> Confirm that the environment is accessible before executing additional tasks.
+<2> Define the grading tasks.
+In this case, an Ansible playbook is used.
+You may need to develop several tasks to grade a lab or comprehensive review.
+
+The next step is to define the `finish` function to specify the tasks executed with the `lab finish` command. 
+
+.GE finish tasks
+[subs=+quotes,+macros,role='fileinput']
+----
+    def finish(self):
+        """
+        Perform post-lab cleanup
+        """
+        logging.debug("{} / {}".format(SKU, sys._getframe().f_code.co_name))
+        items = [
+            {
+                "label": "Checking lab systems",    <1>
+                "task": labtools.check_host_reachable,
+                "hosts": _targets,
+                "fatal": True,
+            },
+            {
+                "label": "Deleting the " + NAMESPACE + " project", <2>
+                "task": self._delete_ge_namespace,
+                "fatal": True,
+            },
+        ]
+        userinterface.Console(items).run_items(action="Finishing")
+----
+<1> Confirm that the environment is accessible before executing additional tasks.
+<2> This task deletes the GE namespace and all resources within that namespace.
+
+You have now specified the tasks of the `start`, `grade`, and `finish` functions.
+
+==== Defining the Functions Called by Start
+The next section defines the functions called by start tasks with the `self` reference.
+These are not imported functions, but functions that are defined within the script itself.
+
+You will notice that each function is proceeded with `(self, item)`.
+These are the function's arguments, separated by a comma. 
+Use arguments to pass information into the function.
+
+.Start tasks definitions
+[subs=+quotes,+macros,role='fileinput']
+----
+# Start tasks
+    def _start_ping_api(self, item):
+        """
+        Execute a task to prepare the system for the lab
+        """
+        if item["host"] is None:
+            item["failed"] = True
+            item["msgs"] = [{"text": "OCP_HOST is not defined"}]
+        else:
+            check = labtools.ping(item["host"])
+            for key in check:
+                item[key] = check[key]
+
+        # Return status to abort lab execution when failed
+        return item["failed"]
+
+    def _start_check_api(self, item):
+        if item["host"] is None or item["port"] is None:
+            item["failed"] = True
+            item["msgs"] = [{"text": "OCP_HOST and OCP_PORT are not defined"}]
+        else:
+            if api.isApiUp(item["host"], port=item["port"]):
+                item["failed"] = False
+            else:
+                item["failed"] = True
+                item["msgs"] = [
+                    {
+                        "text": "API could not be reached: " + "https://{}:{}/".format(item["host"], item["port"])
+                    }
+                ]
+
+        # Return status to abort lab execution when failed
+        return item["failed"]
+
+    def _start_check_cluster_ready(self, item): <3>
+        item["failed"] = True
+        # Get resources from cluster to check API
+        self.oc_client.resources.get(
+            api_version="project.openshift.io/v1", kind="Project"
+        ).get()
+        self.oc_client.resources.get(api_version="v1", kind="Node").get()
+        self.oc_client.resources.get(api_version="v1", kind="Namespace").get()
+
+        try:
+            v1_config = self.oc_client.resources.get(
+                api_version="config.openshift.io/v1", kind="ClusterVersion"
+            )
+            cluster_version = v1_config.get().items[0]
+            if cluster_version.spec.clusterID is None:
+                item["failed"] = True
+                item["msgs"] = [{"text": "Cluster ID could not be found"}]
+            else:
+                item["failed"] = False
+        except Exception:
+            item["msgs"] = [{"text": "Cluster is not OpenShift"}]
+
+    def _check_ge_namespace(self, item):
+        """
+        Check GE namespace
+        """
+        item["failed"] = False
+        if self.resource_exists("v1", "Namespace", (NAMESPACE), ""):
+            item["failed"] = True
+            item["msgs"] = [{"text":
+                            "The " + NAMESPACE + " namespace already exists, please " + "delete it or run 'lab finish network-external' " + "before starting this GE"}]
+        return item["failed"]
+----
+
+==== Defining the Functions Called by Grade and Finish
+
+The next section defines the functions for the grading tasks, if any, and the finish tasks.
+
+.Grade and finish definitions
+[subs=+quotes,+macros,role='fileinput']
+----        
+# Grading Tasks
+# Finish Tasks
+
+    def _delete_ge_namespace(self, item):
+
+        item["failed"] = False
+
+        try:
+            self.delete_resource("v1", "Namespace", (NAMESPACE), "")
+        except Exception as e:
+            item["failed"] = True
+            item["msgs"] = [{"text": "Failed removing namespace: %s" % e}]
+----
+
+=== Using Ansible Playbooks
+Ansible playbooks and inventory files are accessible through `~/rht-labs-do316/src/d0316/ansible`.
+This directory includes subdirectories for GEs that utilize Ansible.
+Create a subdirectory for your exercise and save any playbooks to this directory.
+
+=== Overview of a Playbook for Creating a VM
+
+The `~/rht-labs-do316/src/do316/templates` directory contains a template called, "ansible-create-vm-dv-project".
+This template uses the Kubernetes (k8s) module to create resources in the cluster.
+The k8s module allows for an "inline" definition of a resource.
+This definition is equivalent to a YAML file you would apply with the CLI.
+
+The playbook creates the project namespace, the datavolume for the VM, and the VM itself. 
+It is currently parametized with a single project, DV, and VM in mind. 
+You can change the parameters to create more than one.
+Refer to the Ansible documentation for parameter formatting.
+
+
+==== Specifying Defaults and Variables
+
+This section defines the defaults and variables for the playbook.
+Additional group and host variables are defined in the `ansible/inventory` directory.
+
+.Defaults and variables
+[subs=+quotes,+macros,role='fileinput']
+----
+- name: Create Project, VM, and datavolume
+  hosts: utility    <1>
+  remote_user: lab  <2>
+  gather_facts: False
+  module_defaults:
+    group/k8s: <3>
+      host: "{{ ocp_cluster['host'] }}" 
+      kubeconfig: "{{ ocp_cluster['kubeconfig'] }}"
+      validate_certs: "{{ ocp_cluster['validate_certs'] }}"
+  # Adjust the variables below to suit your VM.
+  # Be sure to remove the < > around your variable but maintain the extensions and their spacing (qcow2 or Gi)
+  # This will create a RHEL 8.5 image with 2Gi memory and 1 CPU.
+  # Further adjustments can be made to the VM yaml manifest in the "Create {{ vm_name}}" task.
+  vars: <4>
+    vm_namespace: <change-me> #Example: test-vms
+    vm_name: <change-me> #Example: my-vm
+    vm_app: <change-me> #Example: myapp
+    # The vm_app variable is only applied to the VM, not to the VMI/virt-launcher pod.
+    # This is the standard behavior when deploying a VM from the web console.
+    # Apply the label to the VMI/virt-launcher pod if you need a service to resolve to the VMI/virt-launcher pod.
+    # To apply the label, uncomment the variable in the Create VM task in the .spec.template.metadata.labels object.
+    utility_url: http://utility.lab.example.com:8080/openshift4/images/
+    vm_qcow2: <change-me>.qcow2 #Example: mariadb-server.qcow2
+    vm_size: <change-me>Gi #Example: 10Gi
+    vm_sc_name: <change-me> #Example: ocs-external-storagecluster-ceph-rbd
+    vm_sc_mode: <change-me> #Example: Block
+----
+<1> Where the playbook will run.
+`Utility` is typically defined here.
+<2> The account used to run the playbook.
+The `lab` user on `Utility` has sufficient privileges to execute most tasks.
+<3> The defaults for any modules called by the playbook.
+In this case, the defaults specified are for authenticating the module in the cluster.
+<4> Variables for the project, datavolume, and VM manifiests.
+Provide values to the variables and remove the `<>` characters. 
+Be mind of spacing and extensions.
+
+==== Executed Tasks
+This section includes the tasks that will be executed by the playbook.
+Tasks are executed in the order specified.
+You may adjust the values within the tasks as needed.
+Be mindful of the formatting of the referenced variables.
+
+.Tasks
+[subs=+quotes,+macros,role='fileinput']
+----
+  tasks:
+    - name: Verify HyperConverged is Ready <1>
+      k8s:
+        api_version: hco.kubevirt.io/v1beta1
+        namespace: openshift-cnv
+        kind: HyperConverged
+        name: kubevirt-hyperconverged
+        wait: yes   <2>
+        wait_condition: 
+          type: Available
+          status: "True"
+        wait_sleep: 30
+        wait_timeout: 300
+    - name: Create {{ vm_namespace }} project <3>
+      k8s:
+        state: present
+        inline:
+          apiVersion: project.openshift.io/v1
+          kind: Project
+          metadata:
+            name: "{{ vm_namespace }}"
+    - name: Create {{ vm_name }} vm and dv <4>
+      k8s:
+        state: present
+        namespace: "{{ vm_namespace }}"
+        inline:
+          apiVersion: kubevirt.io/v1alpha3
+          kind: VirtualMachine
+          metadata:
+            name: "{{ vm_name }}"
+            namespace: "{{ vm_namespace }}"
+            labels:
+              app: "{{ vm_app }}"
+              kubevirt.io/vm: "{{ vm_name }}"
+              flavor.template.kubevirt.io/small: 'true'
+              os.template.kubevirt.io/rhel8.4: 'true'
+              vm.kubevirt.io/template: rhel8-server-small
+              vm.kubevirt.io/template.namespace: openshift
+              vm.kubevirt.io/template.revision: '1'
+              vm.kubevirt.io/template.version: v0.16.2
+              workload.template.kubevirt.io/server: 'true'
+          spec:
+            dataVolumeTemplates:
+              - apiVersion: cdi.kubevirt.io/v1beta1
+                kind: DataVolume
+                metadata:
+                  name: "{{ vm_name }}"
+                spec:
+                  pvc:
+                    accessModes:
+                      - ReadWriteMany
+                    resources:
+                      requests:
+                        storage: "{{ vm_size }}"
+                    storageClassName: "{{ vm_sc_name }}"
+                    volumeMode: "{{ vm_sc_mode }}"
+                  source:
+                    http:
+                      url: "{{ utility_url}}{{ vm_qcow2 }}"
+            runStrategy: RerunOnFailure
+            template:
+              metadata:
+                labels:
+                  #app: "{{ vm_app }}"
+                  flavor.template.kubevirt.io/small: 'true'
+                  kubevirt.io/domain: "{{ vm_name }}"
+                  kubevirt.io/size: small
+                  os.template.kubevirt.io/rhel8.4: 'true'
+                  workload.template.kubevirt.io/server: 'true'
+              spec:
+                domain:
+                  cpu:
+                    cores: 1
+                    sockets: 1
+                    threads: 1
+                  devices:
+                    disks:
+                      - bootOrder: 1
+                        disk:
+                          bus: virtio
+                        name: "{{ vm_name }}"
+                      - disk:
+                          bus: virtio
+                        name: cloudinitdisk
+                    interfaces:
+                      - name: default
+                        masquerade: {}
+                    networkInterfaceMultiqueue: true
+                    rng: {}
+                  machine:
+                    type: pc-q35-rhel8.4.0
+                  resources:
+                    requests:
+                      memory: 2Gi
+                evictionStrategy: LiveMigrate
+                hostname: "{{ vm_name }}"
+                networks:
+                  - name: default
+                    pod: {}
+                terminationGracePeriodSeconds: 180
+                volumes:
+                  - dataVolume:
+                      name: "{{ vm_name }}"
+                    name: "{{ vm_name }}"
+                  - cloudInitNoCloud: <5>
+                      userData: |-
+                        #cloud-config
+                        user: developer
+                        password: developer
+                        chpasswd: { expire: False }
+                    name: cloudinitdisk
+        wait: yes
+        wait_condition:
+          type: Ready
+          status: "True"
+        wait_sleep: 30
+        wait_timeout: 420
+----
+<1> Verify that OpenShift Virtualization is ready.
+<2> `wait` and `wait_condition` are used to ensure resources are ready before moving on to the next task.
+<3> Create the namespace or project for your VM
+<4> Create the datavolume and the VM for your exercise.
+<5> The `cloudInitNoCloud` section can be used to modify the VM upon first boot.
