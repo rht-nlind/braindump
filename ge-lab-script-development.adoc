@@ -1,4 +1,4 @@
-ifndef::backend-docbook5,backend-docbook45[:imagesdir: ../]
+ifndef::backend-docbook5,backend-docbook45[:imagesdir: images/lab]
 [id='ge-lab-scripting']
 = GE Lab Scripts Development
 
@@ -74,12 +74,12 @@ Host idm.ocp4.example.com
 ----
 
 [id='remmina-basic']
-. Remmina basic settings
-image::images/lab/remmina-workstation-basic.png[align="center",width="100%"]
+.Remmina basic settings
+image::remmina-workstation-basic.png[align="center",width="100%"]
 
 [id='remmina-ssh']
-. Remmina SSH tunnel settings
-image::images/lab/remmina-workstation-ssh-tunnel.png[align="center",width="100%"]
+.Remmina SSH tunnel settings
+image::remmina-workstation-ssh-tunnel.png[align="center",width="100%"]
 
 2.5) Connect to `workstation` with `Remmina` and `Visual Studio Code`.
 
