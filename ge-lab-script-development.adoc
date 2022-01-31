@@ -1,8 +1,11 @@
 ifndef::backend-docbook5,backend-docbook45[:imagesdir: images/lab]
 [id='ge-lab-scripting']
 = GE Lab Scripts Development
+:toc: preamble
+:toclevels: 5
 
 This guide documents the steps I have taken to develop `lab` scripts for the DO316 course GEs.
+
 
 == Prerequisites
 * A GitHub account with access to the *Red Hat Training GitHub Organization*
@@ -12,7 +15,7 @@ This guide documents the steps I have taken to develop `lab` scripts for the DO3
 * `Remmina Remote Desktop` installed (Optional; available in the software catalog)
 
 This guide assumes `Remmina` will be used to connect to the classroom lab environment.
-`Remmina` helps me differeniate between development occuring on my local machine (where I use `Terminal`) and development occuring in the classroom. 
+`Remmina` helps me differentiate between development occurring on my local machine (where I use `Terminal`) and development occurring in the classroom. 
 This guide will not cover the steps to configure `Visual Studio Code` and the `Remote-SSH` extension.
 
 == Prepare the Environment
@@ -126,7 +129,7 @@ These scripts specify the destination directory as the course SKU in title case.
 [subs=+quotes]
 ----
 [student@workstation ~]$ *cd do316*
-[student@workstation do316]$ *git checkout -b <branch_name>
+[student@workstation do316]$ *git checkout -b <branch_name>*
 ----
 
 [NOTE]
@@ -236,17 +239,20 @@ The general steps for script development are:
 This allows you to make changes to the script and have it immediately reflected in the virtual environment on `workstation`.
 
 3) Modify the GE python file to include tasks that:
+
 * Confirm the environment is ready and available.
 * Create or copy the files and resources needed in the cluster or on `workstation` for the exercise.
-* Call any needed Ansible playboooks
+* Call any needed Ansible playbooks
 * Cleanup the environment after the exercise is complete
 
-4) Run a linter to check for formatting errors in your Python code 
+4) Run a linter to check for formatting errors in your Python code.
+
 * Use `flake8 __path/to/file.py__`to check for errors.
 * The site, https://www.flake8rules.com/, includes definitions for the various error codes and insights on correction.
 
 5) If using an Ansible, check for syntax errors in your defined playbook(s).
-* Use `ansible-playboook -i __/path/to/inventory__ --syntax-check __/path/to/playbook__` and correct any errors.
+
+* Use `ansible-playbook -i __/path/to/inventory__ --syntax-check __/path/to/playbook__` and correct any errors.
 * You can also use `ansible-playbook -c` to do a dry run of your playbook.
 
 6) Commit any changes and then run the `lab start` and `lab finish` commands on `workstation` to test functionality.
@@ -255,11 +261,11 @@ This allows you to make changes to the script and have it immediately reflected 
 
 8) Run through your GE as the `student` user and adjust your GE and scripts as necessary.
 
-9) When satifisfied with your script, commit and push to the course repo.
+9) When satisfied with your script, commit and push to the course repo.
 
 10) Deactivate the virtual environment when you are finished.
 
-=== Overview of Typical Script Content
+=== Typical Script Content
 
 This section covers the items to notice or change in a typical lab script.
 The example script, `network-external.py` is broken into sections and includes admonitions that are not in the original file. 
@@ -292,7 +298,7 @@ The keywords must match the titling of the the script file.
 
 ==== Imported Modules
 The next section imports various Python modules and functions into the script.
-Modules may include exectuable statements and definitions for variables and functions.
+Modules may include executable statements and definitions for variables and functions.
 Use `import` to import an entire module.
 Use `from` to import only certain classes (which may include data and functions) from a module.
 
@@ -319,7 +325,7 @@ from labs.common import labtools, userinterface
 # Import all the functions defined in the common.py module
 from do316 import common <3>
 ----
-<1> This imports the functions specifed in `rht-labs-ocp/src/ocp/api.py`.
+<1> This imports the functions specified in `rht-labs-ocp/src/ocp/api.py`.
 Those functions will be used for cluster authentication.
 You can view the available functions in the `rht-labs-ocp` GitHub repository.
 <2> This imports the OpenShift class from `rht-labs-ocp/src/utils.py`.
@@ -400,8 +406,8 @@ Within the task itself, use commas at the end of each line.
                 "fatal": True,  <4>
             },
 ----
-<1> "label" defines the task name and the message displayed to the student.
-<2> "task" defines the module and class or function used for the task. 
+<1> `label` defines the task name and the message displayed to the student.
+<2> `task` defines the module and class or function used for the task. 
 <3> Provide values for arguments or variables required by the class or function.
 <4> Use `True` or `False` to specify if a failed task execution ends the `lab start` script.  
 
@@ -604,7 +610,7 @@ Use arguments to pass information into the function.
         # Return status to abort lab execution when failed
         return item["failed"]
 
-    def _start_check_cluster_ready(self, item): <3>
+    def _start_check_cluster_ready(self, item):
         item["failed"] = True
         # Get resources from cluster to check API
         self.oc_client.resources.get(
@@ -664,7 +670,7 @@ Ansible playbooks and inventory files are accessible through `~/rht-labs-do316/s
 This directory includes subdirectories for GEs that utilize Ansible.
 Create a subdirectory for your exercise and save any playbooks to this directory.
 
-=== Overview of a Playbook for Creating a VM
+==== Overview of a Playbook for Creating a VM
 
 The `~/rht-labs-do316/src/do316/templates` directory contains a template called, "ansible-create-vm-dv-project".
 This template uses the Kubernetes (k8s) module to create resources in the cluster.
@@ -672,12 +678,12 @@ The k8s module allows for an "inline" definition of a resource.
 This definition is equivalent to a YAML file you would apply with the CLI.
 
 The playbook creates the project namespace, the datavolume for the VM, and the VM itself. 
-It is currently parametized with a single project, DV, and VM in mind. 
+It is currently parameterized with a single project, DV, and VM in mind. 
 You can change the parameters to create more than one.
 Refer to the Ansible documentation for parameter formatting.
 
 
-==== Specifying Defaults and Variables
+===== Specifying Defaults and Variables
 
 This section defines the defaults and variables for the playbook.
 Additional group and host variables are defined in the `ansible/inventory` directory.
@@ -718,11 +724,11 @@ Additional group and host variables are defined in the `ansible/inventory` direc
 The `lab` user on `Utility` has sufficient privileges to execute most tasks.
 <3> The defaults for any modules called by the playbook.
 In this case, the defaults specified are for authenticating the module in the cluster.
-<4> Variables for the project, datavolume, and VM manifiests.
+<4> Variables for the project, datavolume, and VM manifests.
 Provide values to the variables and remove the `<>` characters. 
 Be mind of spacing and extensions.
 
-==== Executed Tasks
+===== Executed Tasks
 This section includes the tasks that will be executed by the playbook.
 Tasks are executed in the order specified.
 You may adjust the values within the tasks as needed.
