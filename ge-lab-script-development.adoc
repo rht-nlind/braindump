@@ -94,17 +94,10 @@ image::remmina-workstation-ssh-tunnel.png[align="center",width="100%"]
 [student@workstation ~]$ *git config --global user.email "<your_email>@redhat.com"*
 ----
 
-4) Clone the course and `rht-labs-core` git repos to `workstation`.
+4) Clone the course repo to `workstation`.
 You will need your GitHub email/username and personal access token.
 
-4.1) Clone the `rht-labs-core` repo.
-
-[subs=+quotes]
-----
-[student@workstation ~]$ *git clone https://github.com/RedHatTraining/rht-labs-core.git*
-----
-
-4.2) Clone the course repo and specify the destination directory using the course SKU in lower case (ex: do316).
+4.1) Clone the course repo and specify the destination directory using the course SKU in lower case (ex: do316).
 
 [subs=+quotes]
 ----
@@ -118,7 +111,7 @@ Lower case titling is required to prevent conflict with certain `lab` scripts th
 These scripts specify the destination directory as the course SKU in title case.
 ====
 
-4.3) Create a symbolic link for the course grading directory.
+4.2) Create a symbolic link for the course grading directory.
 
 [subs=+quotes]
 ----
@@ -137,86 +130,23 @@ These scripts specify the destination directory as the course SKU in title case.
 If a development branch already exists in the repo, use `git checkout -b <branch_name> origin/<branch_name>` to checkout the remote branch on `workstation`.
 ====
 
-6) Prepare the virtual environment.
-
-6.1) Install `make` on `workstation`.
-[subs=+quotes]
-----
-[student@workstation do316]$ *sudo dnf install make -y*
-----
-
-6.2) Change to the `rht-labs-core` directory and use the `make` command to create a virtual environment.
+6) Install the course to the existing virtual environment.
 
 [subs=+quotes]
 ----
-[student@workstation do316]$ *cd ~/rht-labs-core*
-[student@workstation rht-labs-core]$ *make venv*
-python3 -m venv ~/.venv/labs && \
-source ~/.venv/labs/bin/activate && \
-  pip3 install --upgrade pip > pip-log.txt && \
-  pip3 install -r requirements.txt >> pip-log.txt && \
-deactivate
-Cache entry deserialization failed, entry ignored
-  Cache entry deserialization failed, entry ignored
-
-All done, execute 'source ~/.venv/labs/bin/activate' to enter the venv
-----
-
-6.3) Activate the virtual environment.
-[subs=+quotes]
-----
-[student@workstation rht-labs-core]$ *source ~/.venv/labs/bin/activate*
-(labs) [student@workstation rht-labs-core]$
-----
-
-6.4) Assign the PyPi server for the environment to a variable.
-This will prevent an error regarding the `rht-labs-ocp` version in the next step.
-
-DEV:
-[subs=+quotes]
-----
-(labs) [student@workstation rht-labs-core]$ *export PIP_EXTRA_INDEX_URL=https://pypi.apps.tools.dev.nextcle.com/repository/labs/simple/*
-----
-
-PROD:
-[subs=+quotes]
-----
-(labs) [student@workstation rht-labs-core]$ *export PIP_EXTRA_INDEX_URL=https://pypi.apps.tools-na.prod.nextcle.com/repository/labs/simple/*
-----
-
-6.5) Install rht-labs-core and course repos.
-
-[subs=+quotes]
-----
-(labs) [student@workstation rht-labs-core]$ *pip3 install -e .*
-Obtaining file:///home/student/rht-labs-core
-  Preparing metadata (setup.py) ... done
-...output omitted...
-Installing collected packages: rht-labs-core
-  Running setup.py develop for rht-labs-core
-Successfully installed rht-labs-core-2.7.1
-(labs) [student@workstation rht-labs-core]$ *cd ~/rht-labs-do316*
-(labs) [student@workstation rht-labs-do316]$ *pip3 install -e .*
+[student@workstation do316]$ *cd ~/rht-labs-do316*
+[student@workstation rht-labs-do316]$ *pip install -e .*
 ...output omitted...
   Running setup.py develop for rht-labs-do316
 Successfully installed idna-ssl-1.1.0 rht-labs-do316-4.9.0 rht-labs-ocp-0.2.1
 ----
 
-6.6) Select the course lab for the development environment.
-This will also update or create the `~/.grading/config.yaml` development configuration file. 
+7) Use `make` to create a linter to test your code for good form.
 
 [subs=+quotes]
 ----
-(labs) [student@workstation rht-labs-do316]$ *lab select do316*
-----
-
-6.7) Use `make` to create a linter to test your code for good form.
-
-[subs=+quotes]
-----
-(labs) [student@workstation rht-labs-do316]$ *cd ~/rht-labs-core*
-(labs) [student@workstation rht-labs-core]$ *make lint*
-python -m flake8
+[student@workstation rht-labs-do316]$ *flake8*
+...output omitted...
 ----
 
 Your environment is now ready to begin lab script development. 
